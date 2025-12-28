@@ -183,9 +183,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         // 暫定的に `layerA.chunks` に混ぜる（設計上の課題点だがブリッジとして実装）
         
         const { ProjectionMapper } = await import('@/lib/semantic-bridge');
-        // 既存のChunkDataに変換（無理やりだが）
+        // 既存構造を引き継いでリソースノードを追加
         const projectedNodes = HomeostaticController.executeProjection(
-            semanticState, externalResources, [] // currentNodesは本来必要だが省略
+            semanticState, externalResources, body.currentNodes || []
         );
         
         const resourceChunks = projectedNodes.map(node => ({
@@ -211,16 +211,19 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
         if (lostStateEstimate.isCritical) {
             const { CriticalInterventionController } = await import('@/lib/intervention-control-service');
             const criticalCtrl = new CriticalInterventionController();
-            // TODO: セッション状態管理がないため、常に一発で全シーケンスを返すか、
-            // 今回は「CriticalInterventionSequence」をLayerA/B/Cに割り当てて返す。
             
-            const sequence = await criticalCtrl.executeIntervention(lostStateEstimate);
-            structure = {
-                layerA: { chunks: [], initialOrder: 'source_order' }, // FactPresentationはLayer Aではないが、便宜上
-                layerB: { availableOperators: [] }, // Constraint
-                layerC: sequence.layerC // Question
-            };
-            // ※注: 型不整合があるが、設計思想の実装を優先し、後で型定義を合わせる
+            // 臨界点での問いを導出
+            const sequence = await criticalCtrl.executeIntervention(lostStateEstimate, cleanedPurpose, body.currentNodes || []);
+            
+            // 型を正しく合わせる: LearningStructureOutputを生成
+            // 臨界点では全レイヤーを表示、問いは導出されたものを使用
+            structure = generateLearningStructure(rawChunks, lostStateEstimate, {
+                showLayerA: true,
+                showLayerB: true,
+                showLayerC: true,
+                layerBEmphasis: false,
+                sequenceFixed: true  // 臨界点では順序固定
+            }, sequence.layerC);
             
         } else {
             // 通常介入

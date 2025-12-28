@@ -15,6 +15,7 @@ import {
   StructuralQuestionType,
   LostStateEstimate
 } from './structure-generation-types';
+import { OutputControl } from './intervention-control-service';
 
 // ============================================
 // 1. Structure Presentation Generator (Layer A)
@@ -164,16 +165,7 @@ export function generateStructuralQuestion(
  * - 禁止される生成: 解説文、重要ポイント強調、学習順提示
  * - 許可される操作: 並べ替え、折りたたみ、時間軸配置、グルーピング
  */
-/**
- * 出力制御インターフェース (intervention-control-serviceと一致させる)
- */
-export interface OutputControl {
-  showLayerA: boolean;
-  showLayerB: boolean;
-  showLayerC: boolean;
-  layerBEmphasis: boolean;
-  sequenceFixed: boolean;
-}
+// OutputControl is imported from './intervention-control-service'
 
 /**
  * 学習構造出力を生成
