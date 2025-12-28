@@ -1,0 +1,124 @@
+/* note-style.css */
+
+/* コンテナ設定: 読みやすさを重視した中央寄せ */
+.note-article-container {
+  max-width: 740px; /* noteの標準的な幅に近い */
+  margin: 0 auto;
+  padding: 40px 24px;
+  background-color: #fff;
+  color: #333;
+  font-family: "Helvetica Neue", Arial, "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif;
+  line-height: 1.9;
+  letter-spacing: 0.04em;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 記事ヘッダー */
+.note-article-header {
+  margin-bottom: 48px;
+}
+
+.note-article-title {
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1.4;
+  margin-bottom: 16px;
+  color: #222;
+}
+
+.note-article-meta {
+  font-size: 14px;
+  color: #777;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* 本文スタイル */
+.note-body {
+  font-size: 18px; /* 少し大きめで読みやすく */
+}
+
+/* 見出し */
+.note-body h1,
+.note-body h2 {
+  font-size: 24px;
+  font-weight: 700;
+  margin-top: 48px;
+  margin-bottom: 24px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #ececec; /* 控えめな区切り線 */
+}
+
+.note-body h3 {
+  font-size: 20px;
+  font-weight: 700;
+  margin-top: 36px;
+  margin-bottom: 16px;
+}
+
+/* 段落 */
+.note-body p {
+  margin-bottom: 28px;
+  line-height: 1.9;
+}
+
+/* リスト */
+.note-body ul,
+.note-body ol {
+  margin-bottom: 28px;
+  padding-left: 24px;
+}
+
+.note-body li {
+  margin-bottom: 8px;
+}
+
+/* 引用 */
+.note-body blockquote {
+  margin: 32px 0;
+  padding: 0 16px;
+  border-left: 4px solid #e5e5e5;
+  color: #666;
+  font-style: italic;
+  background-color: #f9f9f9;
+  padding: 16px;
+}
+
+/* コードブロック */
+.note-body pre {
+  background-color: #f6f8fa;
+  padding: 16px;
+  border-radius: 4px;
+  overflow-x: auto;
+  margin-bottom: 32px;
+  font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+/* リンク */
+.note-body a {
+  color: #2cb696; /* noteグリーンに近い色 */
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.note-body a:hover {
+  color: #239b80;
+}
+
+/* 画像 */
+.note-body img {
+  max-width: 100%;
+  height: auto;
+  border-radius: 4px;
+  margin: 32px 0;
+  display: block;
+}
+
+/* 強調 */
+.note-body strong {
+  background: linear-gradient(transparent 60%, #e6f7f2 60%); /* マーカー風 */
+  padding: 0 2px;
+}
