@@ -1,0 +1,128 @@
+@import "tailwindcss";
+
+/* ============================================
+   Adaptive Learning System - Design System v4.0 (Premium)
+   Glassmorphism + Dynamic Backgrounds
+   ============================================ */
+
+@theme {
+  --color-surface-dim: var(--surface-dim);
+  --color-surface: var(--surface);
+  --color-surface-bright: var(--surface-bright);
+  
+  --color-on-surface: var(--on-surface);
+  --color-on-surface-muted: var(--on-surface-muted);
+  
+  --color-primary: var(--primary);
+  --color-primary-glow: var(--primary-glow);
+  
+  --color-glass: var(--glass);
+  --color-glass-border: var(--glass-border);
+  
+  --animate-blob: blob 7s infinite;
+  
+  @keyframes blob {
+    0% { transform: translate(0px, 0px) scale(1); }
+    33% { transform: translate(30px, -50px) scale(1.1); }
+    66% { transform: translate(-20px, 20px) scale(0.9); }
+    100% { transform: translate(0px, 0px) scale(1); }
+  }
+}
+
+:root {
+  /* Dark Mode Default (Premium Dark) */
+  --surface-dim: #050505;
+  --surface: #0a0a0a;
+  --surface-bright: #171717;
+  
+  --on-surface: #ffffff;
+  --on-surface-muted: #a3a3a3;
+  
+  --primary: #3b82f6;
+  --primary-glow: rgba(59, 130, 246, 0.5);
+  
+  --glass: rgba(20, 20, 20, 0.7);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  
+  /* Gradients */
+  --bg-gradient: radial-gradient(circle at 50% 0%, #1a1a2e 0%, #000000 100%);
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --surface-dim: #f0f4f8;
+    --surface: #ffffff;
+    --surface-bright: #f8fafc;
+    
+    --on-surface: #1e293b;
+    --on-surface-muted: #64748b;
+    
+    --primary: #2563eb;
+    --primary-glow: rgba(37, 99, 235, 0.3);
+    
+    --glass: rgba(255, 255, 255, 0.7);
+    --glass-border: rgba(0, 0, 0, 0.05);
+    
+    --bg-gradient: radial-gradient(circle at 50% 0%, #e0f2fe 0%, #f0f9ff 100%);
+  }
+}
+
+body {
+  background: var(--surface-dim);
+  background-image: var(--bg-gradient);
+  color: var(--on-surface);
+  font-family: 'Inter', system-ui, sans-serif;
+  min-height: 100vh;
+  margin: 0;
+  overflow: hidden; /* App-like feel */
+}
+
+/* ============================================
+   Glassmorphism Utilities
+   ============================================ */
+
+.glass {
+  background: var(--glass);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
+}
+
+.glass-heavy {
+  background: var(--surface); /* Fallback */
+  background: color-mix(in srgb, var(--surface) 80%, transparent);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border-bottom: 1px solid var(--glass-border);
+}
+
+/* ============================================
+   Custom Scrollbar
+   ============================================ */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--on-surface-muted);
+  border-radius: 3px;
+  opacity: 0.3;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--on-surface);
+}
+
+/* ============================================
+   Animation Utilities
+   ============================================ */
+.animate-in {
+  animation: fadeIn 0.5s ease-out forwards;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
