@@ -53,7 +53,7 @@ export class LearnerSupportService {
 
     // Phase 2: ノード抽出（構造更新）
     // AIに現在の構造を渡し、更新された構造を受け取る
-    const extractionResult = await aiService.extractNodes(purposeAlpha, intentResult, baseContextNodes as any[]);
+    const extractionResult = await aiService.extractNodes(purposeAlpha, intentResult, baseContextNodes as any[], logs as any[]);
 
     // Phase 3: 選択肢生成
     // 更新されたノード構造に基づいて選択肢を生成

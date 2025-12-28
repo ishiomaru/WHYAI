@@ -255,7 +255,7 @@ JSON形式で回答:
    * - ノードの評価禁止
    * - 単純な連番IDの使用禁止 (n1, n2...)
    */
-  async extractNodes(userInput: string, intentResult: object, currentNodes: any[] = []): Promise<{
+  async extractNodes(userInput: string, intentResult: object, currentNodes: any[] = [], recentLogs: any[] = []): Promise<{
     nodes: Array<{ id: string; label: string; description?: string; reliability: 'low' | 'medium' | 'high' }>;
     edges: Array<{ from: string; to: string }>;
     contradictions: Array<{ source: string; target: string; reason: string }>;
@@ -265,6 +265,9 @@ JSON形式で回答:
 
 ## 現在の構造 (Context)
 ${JSON.stringify(currentNodes)}
+
+## 直近の会話/操作履歴 (History)
+${JSON.stringify(recentLogs)}
 
 ## ユーザー入力 (New Input)
 "${userInput}"
@@ -334,36 +337,41 @@ ${JSON.stringify(intentResult)}
     choices: Array<{ id: string; label: string; impact: string }>;
   }> {
     const prompt = `
-あなたは空間管理者です。現在の「思考の地図（ノード構造）」に基づいて、学習者の思考を深めるための診断的な「問い」と選択肢を生成せよ。
+あなたは空間管理者です。現在の「思考の地図（ノード構造）」と「学習者の入力」に基づいて、思考を深めるための診断的な「問い」と選択肢を生成せよ。
 
 ## 現在の構造 (Structure Context)
 ${JSON.stringify(nodes)}
 
-## ユーザー入力 (Input)
+## 学習者の入力 (User Input)
 "${userInput}"
 
 ## 迷子状態 (State)
 ${lostState || 'DIAGNOSTIC'}
 
-## タスク: 問いの生成 (Question Generation)
-1. **現状の把握**: 構造の中で、どの部分が不明瞭か、または次に深掘りすべきかを見極める。
-2. **問いの生成**: 学習者に思考を促す、具体的かつ構造的な問いを作成する。
-   - 悪い例: 「どうしますか？」（曖昧）
-   - 良い例: 「この『${userInput}』という目的において、最も重視する制約は何か？」「『概念A』と『概念B』の関係性はどのようなものか？」
-3. **選択肢の生成**: 問いに対する典型的な回答パターンを選択肢として提示する。
-   - 必須: 「わからない」または「特にない」（逃げ道）を含めること。
+## 前提: ロジックによる判断基準
+あなたは以下のロジックに従って問いを選択しなければならない：
+- **構造が希薄な場合**: 探索範囲を広げる問い（概念の分解、関連付け）
+- **矛盾がある場合**: 矛盾の解消を促す問い
+- **構造が複雑な場合**: 優先順位や判断軸を問う問い
 
-【禁止事項】
-- 特定の選択肢を推奨しない（「おすすめ」など）
-- 正解・不正解の概念を持ち込まない
-- 誘導的な問いかけをしない
+## タスク: 問いと選択肢の生成
+1. **問いの生成**: ノード構造から導出される具体的な問いを作成する。
+   - 【絶対禁止】ユーザー入力をそのまま「目的」として引用すること。（例: 「『${userInput}』という目的について...」は禁止）
+   - 【推奨】ノード間の関係性、不足している視点、優先順位について問う。
+
+2. **選択肢の生成**: 以下のルールに従って選択肢を生成する。
+   - **数**: 状況に応じて **3〜5個** の間で動的に決定する（構造が複雑なら絞り、単純なら広げる）。
+   - **内容**: ノード構造に基づいた具体的な概念や行動指針。
+   - **必須**: 最後に「わからない」または「特にない」を含めること（逃げ道）。
 
 JSON形式で回答:
 {
-  "question_text": "具体的で構造的な問い",
+  "question_text": "構造に基づいた具体的な問い",
   "choices": [
-    { "id": "c1", "label": "選択肢ラベル", "impact": "選択時の影響" },
-    { "id": "unknown", "label": "わからない", "impact": "さらなる問いへ" }
+    { "id": "c1", "label": "選択肢1", "impact": "選択時の構造的影響" },
+    { "id": "c2", "label": "選択肢2", "impact": "選択時の構造的影響" },
+    ...
+    { "id": "unknown", "label": "わからない", "impact": "スキップ" }
   ]
 }
 `;

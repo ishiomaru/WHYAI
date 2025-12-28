@@ -284,9 +284,8 @@ export class StructuralFactAnalyzer {
 
     // 構造メトリクスの計算
     const nodeCount = currentNodes.length;
-    // relationCountは現状取得できないためログのDeltaの蓄積またはノード構造からの推測が必要だが、
-    // StructureNodeにはrelationがないため、一旦0とする（将来的に拡張が必要）
-    const relationCount = 0; 
+    // relationCountをログのDeltaから累積計算
+    const relationCount = deltas.reduce((sum, d) => sum + (d.relationDelta || 0), 0); 
     
     // 最大深度
     const focusDepth = currentNodes.length > 0 
@@ -386,16 +385,16 @@ export class CriticalInterventionController {
    private strictCtrl = new StrictInterventionController();
 
    async executeIntervention(
-     estimate: LostStateEstimate, 
+     estimate: LostStateEstimate,
+     purposeAlpha: string,
      currentNodes: readonly StructureNode[] = []
    ): Promise<CriticalInterventionSequence> {
      // 事実と制約は固定（安全装置）
      const layerA = { type: 'FACT' as const, content: '（構造的停滞が検出されました）' };
      const layerB = { type: 'CONSTRAINT' as const, content: '現在の視点では差分が生まれません。' };
      
-     // 問いのみ動的導出
-     // Contextがここにはないので、Placeholder
-     const layerC = await this.strictCtrl.deriveIntervention(estimate, { purposeAlpha: '（不明）' }, currentNodes);
+     // 問いを動的導出
+     const layerC = await this.strictCtrl.deriveIntervention(estimate, { purposeAlpha }, currentNodes);
 
      return { layerA, layerB, layerC };
    }
