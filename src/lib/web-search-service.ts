@@ -124,56 +124,39 @@ async function fetchReadableContent(targetUrl: string): Promise<string> {
 
 /**
  * Searches DuckDuckGo for a query.
- * Falls back to a mock if no results are found (e.g., due to API limitations).
+ * 
+ * 【設計原則】
+ * - モック/フォールバック禁止
+ * - 結果がない場合は空配列を返す
+ * - APIエラー時はエラーを投げる
  */
 async function searchDuckDuckGo(query: SearchQuery): Promise<SearchResult[]> {
   const q = query.tokens.join('+');
   const url = `${SEARCH_CONFIG.baseUrl}?q=${q}&format=json&no_html=1&skip_disambig=1`;
   
-  try {
-    const response = await fetch(url, {
-      signal: AbortSignal.timeout(SEARCH_CONFIG.timeout)
-    });
-    
-    if (!response.ok) return [];
-    
-    const data = await response.json();
-    const results: SearchResult[] = [];
+  const response = await fetch(url, {
+    signal: AbortSignal.timeout(SEARCH_CONFIG.timeout)
+  });
+  
+  if (!response.ok) {
+    throw new Error(`DuckDuckGo検索失敗: ${response.status} ${response.statusText}`);
+  }
+  
+  const data = await response.json();
+  const results: SearchResult[] = [];
 
-    // Extract from RelatedTopics (DuckDuckGo Instant Answer API structure)
-    if (data.RelatedTopics) {
-      for (const topic of data.RelatedTopics) {
-        if (topic.FirstURL && topic.Text) {
-          results.push({
-            title: topic.Text.split(' - ')[0] || 'Result',
-            url: topic.FirstURL,
-            snippet: topic.Text
-          });
-        }
+  // Extract from RelatedTopics (DuckDuckGo Instant Answer API structure)
+  if (data.RelatedTopics) {
+    for (const topic of data.RelatedTopics) {
+      if (topic.FirstURL && topic.Text) {
+        results.push({
+          title: topic.Text.split(' - ')[0] || 'Result',
+          url: topic.FirstURL,
+          snippet: topic.Text
+        });
       }
     }
-
-    // Fallback Mock for demonstration if API returns nothing (common with DDG free API)
-    if (results.length === 0 && query.tokens[0] !== 'test') { // Don't mock for health check
-       console.warn('DDG returned no results, using fail-safe mock for demo.');
-       return [
-         {
-           title: 'MDN Web Docs',
-           url: 'https://developer.mozilla.org/en-US/docs/Web',
-           snippet: 'Resources for developers, by developers.'
-         },
-         {
-           title: 'React Official',
-           url: 'https://react.dev/',
-           snippet: 'The library for web and native user interfaces'
-         }
-       ];
-    }
-    
-    return results.slice(0, SEARCH_CONFIG.maxResults);
-    
-  } catch (error) {
-    console.error('Search failed:', error);
-    return [];
   }
+  
+  return results.slice(0, SEARCH_CONFIG.maxResults);
 }
