@@ -148,50 +148,289 @@ export interface QuestionSemantics {
 }
 
 // ============================================
-// 5. 翻訳テンプレート（表現のみ可変）
+// 5. グローバル禁止ルール
+// CONCEPT_NOTES.md 準拠 - 思考代行の禁止
 // ============================================
 
 /**
- * 翻訳テンプレート
- * 意味構造を言語に変換するためのテンプレート
- * LLMはここにのみ関与できる（変数埋め込み＋自然な日本語化）
+ * 禁止カテゴリの定義
  */
-export const TRANSLATION_TEMPLATES: Record<ViewpointOperationType, Record<QuestionStructureType, string>> = {
+export interface ProhibitionCategory {
+  readonly id: string;
+  readonly description: string;
+  readonly examples: readonly string[];
+}
+
+/**
+ * 禁止ルール全体
+ */
+export interface ProhibitionRules {
+  readonly categories: readonly ProhibitionCategory[];
+}
+
+/**
+ * グローバル禁止ルール
+ * 
+ * 設計書参照: CONCEPT_NOTES.md
+ * - L599-608: AI禁止事項
+ * - L180-186: 問いの違反例
+ * - L1087-1094: 状態断定の禁止
+ * - L1182-1186: サービス原則
+ */
+export const GLOBAL_PROHIBITION_RULES: ProhibitionRules = {
+  categories: [
+    {
+      id: 'NO_IMPORTANCE_JUDGMENT',
+      description: '重要度・優先度の判断を禁止',
+      examples: [
+        '「この情報は初心者向け」',
+        '「重要度が高い」',
+        '「これが一番大事」',
+        '「優先すべきは〜」'
+      ]
+    },
+    {
+      id: 'NO_RECOMMENDATION',
+      description: '推奨・指示の提示を禁止',
+      examples: [
+        '「次はこれをやるべき」',
+        '「おすすめは〜」',
+        '「〜した方がいい」',
+        '「〜すべきです」'
+      ]
+    },
+    {
+      id: 'NO_JUDGMENT_DEMAND',
+      description: '判断を要求する問いを禁止',
+      examples: [
+        '「どうしますか？」',
+        '「何が問題ですか？」',
+        '「別の基準を考えましょうか？」',
+        '「何を選びますか？」'
+      ]
+    },
+    {
+      id: 'NO_STATE_ASSERTION',
+      description: '状態の断定を禁止',
+      examples: [
+        '「あなたはいまM2です」',
+        '「あなたは〜の状態です」',
+        '「あなたは迷っています」'
+      ]
+    },
+    {
+      id: 'NO_EVALUATION',
+      description: '正誤・良否の評価を禁止',
+      examples: [
+        '「それは間違っています」',
+        '「その考えは正しい」',
+        '「良い考えです」',
+        '「その理解は違います」'
+      ]
+    }
+  ]
+};
+
+// ============================================
+// 6. 問いの意味構造（動的生成用）
+// CONCEPT_NOTES.md 準拠 - 視点操作子の意図定義
+// ============================================
+
+/**
+ * 問いの意味構造定義
+ * 
+ * semanticIntent: LLMに渡す「何を問うか」の説明
+ * structuralGoal: 期待される構造変化（検証用）
+ * requiredVariables: 文脈から取得すべき変数
+ */
+export interface QuestionSemantic {
+  readonly semanticIntent: string;
+  readonly structuralGoal: {
+    readonly expectedNodeChange: 'increase' | 'decrease' | 'restructure' | 'none';
+    readonly expectedRelationChange: 'increase' | 'decrease' | 'restructure' | 'none';
+  };
+  readonly requiredVariables: readonly string[];
+}
+
+/**
+ * 視点操作子×問いの型ごとの意味構造
+ * 
+ * 設計書参照: CONCEPT_NOTES.md
+ * - L941-1019: 視点操作子O0-O5の定義
+ * - L149-177: 問いの型1-3の定義
+ */
+export const QUESTION_SEMANTICS: Record<
+  ViewpointOperationType,
+  Record<QuestionStructureType, QuestionSemantic>
+> = {
   PURPOSE_ELICITATION: {
-    DIFFERENCE_ABSENT: '「{target}」を選んだとして、何が変わりそうですか？',
-    GRANULARITY_CHECK: 'それは「やりたいこと」ですか、「できるようになりたいこと」ですか？',
-    OPERATION_TRIGGER: 'もし一つだけ試せるとしたら、何を試しますか？'
+    DIFFERENCE_ABSENT: {
+      semanticIntent: '選択肢を選んだ場合の変化を言語化させる。差分が見えていない状態を解消する。対象ノードへの選択による影響を問う。',
+      structuralGoal: { expectedNodeChange: 'none', expectedRelationChange: 'increase' },
+      requiredVariables: ['target']
+    },
+    GRANULARITY_CHECK: {
+      semanticIntent: '目的の粒度を確認させる。「やりたいこと」と「できるようになりたいこと」の区別を促す。',
+      structuralGoal: { expectedNodeChange: 'increase', expectedRelationChange: 'none' },
+      requiredVariables: []
+    },
+    OPERATION_TRIGGER: {
+      semanticIntent: '具体的な行動への接続を促す。思考から行動への橋渡し。「もし一つだけ試せるとしたら」という制約で具体化を促す。',
+      structuralGoal: { expectedNodeChange: 'increase', expectedRelationChange: 'increase' },
+      requiredVariables: []
+    }
   },
   STATE_EXPANSION: {
-    DIFFERENCE_ABSENT: '「{target}」の一つ手前には、何がありそうですか？',
-    GRANULARITY_CHECK: 'その段階は、もう少し分けられそうですか？',
-    OPERATION_TRIGGER: '最初に手を動かすとしたら、何をしますか？'
+    DIFFERENCE_ABSENT: {
+      semanticIntent: '到達プロセスの中間状態を言語化させる。ゴールの一つ手前を問うことで状態空間を展開する。',
+      structuralGoal: { expectedNodeChange: 'increase', expectedRelationChange: 'increase' },
+      requiredVariables: ['target']
+    },
+    GRANULARITY_CHECK: {
+      semanticIntent: '状態の分割可能性を確認させる。現在の粒度がさらに分けられるかを問う。',
+      structuralGoal: { expectedNodeChange: 'increase', expectedRelationChange: 'none' },
+      requiredVariables: []
+    },
+    OPERATION_TRIGGER: {
+      semanticIntent: '最初の具体行動を想起させる。「最初に手を動かすとしたら」という制約で行動を引き出す。',
+      structuralGoal: { expectedNodeChange: 'increase', expectedRelationChange: 'increase' },
+      requiredVariables: []
+    }
   },
   CHOICE_REDUCTION: {
-    DIFFERENCE_ABSENT: 'この中で「今は選ばなくてよいもの」はどれですか？',
-    GRANULARITY_CHECK: '「{criteria}」という理由は、区別をつけるのに十分そうですか？',
-    OPERATION_TRIGGER: 'これらを「今やる／後でやる」に分けるとしたら？'
+    DIFFERENCE_ABSENT: {
+      semanticIntent: '選択肢の除外可能性を問う。「今は選ばなくてよいもの」を特定させることで選択肢を縮退させる。',
+      structuralGoal: { expectedNodeChange: 'decrease', expectedRelationChange: 'none' },
+      requiredVariables: []
+    },
+    GRANULARITY_CHECK: {
+      semanticIntent: '使用中の評価基準の粒度を確認させる。その基準で区別がつくかを問う。',
+      structuralGoal: { expectedNodeChange: 'none', expectedRelationChange: 'none' },
+      requiredVariables: ['criteria']
+    },
+    OPERATION_TRIGGER: {
+      semanticIntent: '時間軸での分割を促す。「今やる／後でやる」という軸で選択肢を分類させる。',
+      structuralGoal: { expectedNodeChange: 'none', expectedRelationChange: 'increase' },
+      requiredVariables: []
+    }
   },
   CRITERIA_GENERATION: {
-    DIFFERENCE_ABSENT: 'もしこの中から一つ選ぶとしたら、どんな理由があれば差が生まれそうですか？',
-    GRANULARITY_CHECK: '今使っている基準では、どれも同じに見えていませんか？',
-    OPERATION_TRIGGER: '「好き／嫌い」ではなく「できる／できない」で分けるとどうなりますか？'
+    DIFFERENCE_ABSENT: {
+      semanticIntent: '差を生む評価基準の生成を促す。「どんな理由があれば差が生まれそうか」を問う。',
+      structuralGoal: { expectedNodeChange: 'increase', expectedRelationChange: 'increase' },
+      requiredVariables: []
+    },
+    GRANULARITY_CHECK: {
+      semanticIntent: '現在の評価基準の不十分さを気づかせる。「今使っている基準では同じに見えていないか」を問う。',
+      structuralGoal: { expectedNodeChange: 'none', expectedRelationChange: 'none' },
+      requiredVariables: []
+    },
+    OPERATION_TRIGGER: {
+      semanticIntent: '評価軸の切り替えを促す。「好き／嫌い」から「できる／できない」への視点変換を提案。',
+      structuralGoal: { expectedNodeChange: 'none', expectedRelationChange: 'restructure' },
+      requiredVariables: []
+    }
   },
   MEANS_END_SEPARATION: {
-    DIFFERENCE_ABSENT: '「{target}」は目的ですか、それとも手段ですか？',
-    GRANULARITY_CHECK: 'それが「できた」としたら、その先に何がありますか？',
-    OPERATION_TRIGGER: 'これを「目的」と「そのための手段」に分けてみてください'
+    DIFFERENCE_ABSENT: {
+      semanticIntent: '目的と手段の区別を問う。対象が「目的か手段か」を言語化させる。',
+      structuralGoal: { expectedNodeChange: 'increase', expectedRelationChange: 'increase' },
+      requiredVariables: ['target']
+    },
+    GRANULARITY_CHECK: {
+      semanticIntent: '目的の先にあるものを問う。「できたとしたら、その先に何があるか」で目的の階層を確認。',
+      structuralGoal: { expectedNodeChange: 'increase', expectedRelationChange: 'none' },
+      requiredVariables: []
+    },
+    OPERATION_TRIGGER: {
+      semanticIntent: '目的と手段の分離操作を促す。現在の要素を「目的」と「そのための手段」に分類させる。',
+      structuralGoal: { expectedNodeChange: 'increase', expectedRelationChange: 'increase' },
+      requiredVariables: []
+    }
   },
   PATH_VISUALIZATION: {
-    DIFFERENCE_ABSENT: '今やっていることは、「{purpose}」のどこに効いていますか？',
-    GRANULARITY_CHECK: '「{target}」と「{purpose}」の間には、何段階ありそうですか？',
-    OPERATION_TRIGGER: '今の行動を、目的までの道筋に置いてみてください'
+    DIFFERENCE_ABSENT: {
+      semanticIntent: '現在の行動と目的の接続を問う。「今やっていることは目的のどこに効いているか」を言語化させる。',
+      structuralGoal: { expectedNodeChange: 'none', expectedRelationChange: 'increase' },
+      requiredVariables: ['purpose']
+    },
+    GRANULARITY_CHECK: {
+      semanticIntent: '目的までの距離感を確認させる。対象と目的の間の段階数を問う。',
+      structuralGoal: { expectedNodeChange: 'increase', expectedRelationChange: 'none' },
+      requiredVariables: ['target', 'purpose']
+    },
+    OPERATION_TRIGGER: {
+      semanticIntent: '経路の再配置を促す。現在の行動を目的までの道筋に位置づけさせる。',
+      structuralGoal: { expectedNodeChange: 'none', expectedRelationChange: 'restructure' },
+      requiredVariables: []
+    }
   }
 };
 
 // ============================================
-// 6. 問いの導出関数（生成ではない）
+// 7. プロンプト生成関数
 // ============================================
+
+/**
+ * 問い生成用のLLMプロンプトを組み立てる
+ * 
+ * @param semantic - 問いの意味構造
+ * @param context - 現在の文脈（変数値）
+ * @param rules - 禁止ルール
+ * @param targetLanguage - 生成言語（デフォルト: ja）
+ */
+export function buildQuestionGenerationPrompt(
+  semantic: QuestionSemantic,
+  context: Record<string, string>,
+  rules: ProhibitionRules = GLOBAL_PROHIBITION_RULES,
+  targetLanguage: string = 'ja'
+): string {
+  
+  const prohibitionSection = rules.categories.map(cat => 
+    `### ${cat.description}\n禁止例: ${cat.examples.join(' / ')}`
+  ).join('\n\n');
+  
+  const contextSection = Object.entries(context)
+    .filter(([, v]) => v) // 空の値を除外
+    .map(([k, v]) => `- ${k}: ${v}`)
+    .join('\n');
+  
+  const languageInstruction = targetLanguage === 'ja' 
+    ? '日本語で生成してください。' 
+    : `${targetLanguage}で生成してください。`;
+  
+  return `
+# 問い生成タスク
+
+## 生成言語
+${languageInstruction}
+
+## 絶対禁止事項
+以下の表現は絶対に使用しないでください:
+
+${prohibitionSection}
+
+## 生成する問いの意図
+${semantic.semanticIntent}
+
+## 現在の文脈
+${contextSection || '（文脈情報なし）'}
+
+## 出力形式
+- 問いを1文で生成
+- 学習者が自分で考えるきっかけになる表現
+- 判断を求めず、視点を変えさせる
+- 回答を誘導しない
+`.trim();
+}
+
+// ============================================
+// 8. 問いの導出関数（生成ではない）
+// ============================================
+
+// 判定閾値の定義
+const DELTA_THRESHOLD = 0.3;  // nodeDeltaの変化判定閾値
+const REPEAT_THRESHOLD = 2;   // 操作繰り返し判定閾値（要相談）
 
 /**
  * 構造的事実から問いの意味構造を導出する
@@ -206,10 +445,13 @@ export function deriveQuestionSemantics(
   // 問いの型を構造から決定
   let questionType: QuestionStructureType;
   
-  if (fact.sameCriteriaUsed || fact.lastDelta.nodeDelta === 0) {
+  // 差分判定を閾値ベースに変更
+  const hasMinimalChange = Math.abs(fact.lastDelta.nodeDelta) < DELTA_THRESHOLD;
+  
+  if (fact.sameCriteriaUsed || hasMinimalChange) {
     // 差分が生まれていない → 型1
     questionType = 'DIFFERENCE_ABSENT';
-  } else if (fact.sameOperatorRepeated >= 2) {
+  } else if (fact.sameOperatorRepeated >= REPEAT_THRESHOLD) {
     // 同じ操作を繰り返している → 型2（粒度確認）
     questionType = 'GRANULARITY_CHECK';
   } else if (fact.sortingAttempted || fact.exclusionAttempted || fact.groupingAttempted) {
@@ -237,24 +479,37 @@ export function deriveQuestionSemantics(
 }
 
 /**
- * 問いの意味構造を言語に翻訳する
- * これがLLMが関与できる唯一の場所（ただし意味は変えない）
+ * 問いの意味構造をLLM用プロンプトとして返す
+ * 
+ * 注意: この関数は同期的にプロンプトを返すのみ。
+ * 実際のLLM呼び出しはai-service.tsで行う。
  */
-export function translateQuestionToLanguage(semantics: QuestionSemantics): string {
-  const template = TRANSLATION_TEMPLATES[semantics.operationType]?.[semantics.questionType];
+export function getQuestionGenerationPrompt(
+  semantics: QuestionSemantics,
+  targetLanguage: string = 'ja'
+): string {
+  const semantic = QUESTION_SEMANTICS[semantics.operationType]?.[semantics.questionType];
   
-  if (!template) {
-    // フォールバック
-    return '次に何が見えますか？';
+  if (!semantic) {
+    // フォールバック: 基本的な視点操作を促す
+    return buildQuestionGenerationPrompt(
+      {
+        semanticIntent: '現在の状況を別の角度から見させる問いを生成する。',
+        structuralGoal: { expectedNodeChange: 'none', expectedRelationChange: 'none' },
+        requiredVariables: []
+      },
+      semantics.variables,
+      GLOBAL_PROHIBITION_RULES,
+      targetLanguage
+    );
   }
   
-  // 変数を埋め込み
-  let result = template;
-  for (const [key, value] of Object.entries(semantics.variables)) {
-    result = result.replace(new RegExp(`\\{${key}\\}`, 'g'), value || 'それ');
-  }
-  
-  return result;
+  return buildQuestionGenerationPrompt(
+    semantic,
+    semantics.variables,
+    GLOBAL_PROHIBITION_RULES,
+    targetLanguage
+  );
 }
 
 

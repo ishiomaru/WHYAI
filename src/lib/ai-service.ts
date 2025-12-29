@@ -1,7 +1,8 @@
 import OpenAI from 'openai';
 import { 
-  QuestionSemantics, 
-  translateQuestionToLanguage
+  QuestionSemantics,
+  getQuestionGenerationPrompt,
+  GLOBAL_PROHIBITION_RULES
 } from './concept-compliant-types';
 import { SupportContext } from './support-context-assembler';
 import {
@@ -113,84 +114,48 @@ export class AIService {
   /**
    * 問いの意味構造を自然言語に翻訳
    * (Translation Layer)
-   * ※テンプレート完全廃止。動的生成だが、型（構造）を厳守する。
-   */
-  /**
-   * 問いの意味構造を自然言語に翻訳
-   * (Translation Layer)
-   * ※テンプレート完全廃止。動的生成だが、型（構造）を厳守する。
+   * 
+   * 設計書準拠: CONCEPT_NOTES.md
+   * - 問いの意味は固定、表現は動的生成
+   * - グローバル禁止ルールを注入
+   * - LLMが失敗しないことが前提（モック/フォールバック禁止）
    */
   async translateToNaturalLanguage(
-    semantics: QuestionSemantics
+    semantics: QuestionSemantics,
+    targetLanguage: string = 'ja'
   ): Promise<string> {
     
-    // フォールバック用のテンプレート関数を使用 (static import)
-    // const { translateQuestionToLanguage } = require('./concept-compliant-types');
-
+    // 新しいプロンプト生成方式を使用
+    const questionPrompt = getQuestionGenerationPrompt(semantics, targetLanguage);
+    
     const systemPrompt = `
-    Role: Space Manager (Cognitive Map Generation Engine)
-    
-    CRITICAL INSTRUCTION:
-    You are a "Projection Device". You do NOT speak as a human.
-    You strictly translate the provided "Meaning Structure" (Semantics) into a structural Japanese sentence.
-    
-    TABOOS (Strictly Prohibited):
-    - NO Teaching / Explaining / Summarizing.
-    - NO Recommendations / Judgments.
-    - NO Empathy / Chatting.
-    - NO EMPTY BRACKETS like 「」. If a variable is missing, use "それ" (it) or "これ" (this).
-    
-    Input:
-    - Operation Type (O0-O5)
-    - Question Type (Verification/Difference/Criteria, etc.)
-    - Context Variables
-    
-    Output:
-    - A single Japanese sentence that reflects the structure.
-    - It must be DYNAMIC based on the specific variables, not a static template.
-    
-    Examples:
-    Input: { operationType: 'PURPOSE_ELICITATION', questionType: 'DIFFERENCE_ABSENT', variables: { target: 'A' } }
-    Output: 「A」を選んだとして、何が変わりそうですか？
+あなたは「空間管理者（Space Manager）」です。教師でも助言者でもありません。
+学習者の思考空間の構造を投影し、その構造から必然的に発生する「問い」を生成する装置です。
 
-    Input: { operationType: 'CRITERIA_GENERATION', questionType: 'GRANULARITY_CHECK', variables: { criteria: '好き嫌い' } }
-    Output: 「好き嫌い」という基準では、どれも同じに見えていませんか？
-    `;
+以下のプロンプトに従って、問いを1文だけ生成してください。
+複数の文章、解説、例示は不要です。問い1文のみを返してください。
 
-    const userPrompt = `
-    Semantics: ${JSON.stringify(semantics)}
+変数が空の場合は「それ」「これ」などの代名詞を使用してください。
+「」の中が空になる表現は絶対に避けてください。
+`;
+
+    const completion = await this.openai.chat.completions.create({
+      model: MODEL_NAME,
+      messages: [
+        { role: 'system', content: systemPrompt },
+        { role: 'user', content: questionPrompt }
+      ],
+      temperature: 0.7 
+    });
     
-    Translate this structure into a Space Manager's projection text.
-    `;
-
-    try {
-      const completion = await this.openai.chat.completions.create({
-        model: MODEL_NAME,
-        messages: [
-          { role: 'system', content: systemPrompt },
-          { role: 'user', content: userPrompt }
-        ],
-        temperature: 0.7 
-      });
-      
-      const content = completion.choices[0].message.content?.trim();
-      
-      // コンテンツが空、または「」を含む、またはエラーメッセージの場合はフォールバック
-      // 正規表現強化: 文字列中に「」が含まれていたらNG (例: "「」はどうですか？")
-      const hasEmptyBrackets = !content || /「\s*」/.test(content) || content.length < 2;
-      
-      if (hasEmptyBrackets) {
-        console.warn('AI returned invalid content (contains empty brackets), falling back to template.', { content });
-        return translateQuestionToLanguage(semantics);
-      }
-      
-      return content;
-      
-    } catch (error) {
-      console.error('Translation error:', error);
-      // エラー時はテンプレートにフォールバック
-      return translateQuestionToLanguage(semantics);
+    const content = completion.choices[0].message.content?.trim();
+    
+    // バリデーション: 空、空括弧、短すぎる場合はエラー
+    if (!content || /「\s*」/.test(content) || content.length < 2) {
+      throw new Error(`問い生成失敗: 無効なLLMレスポンス (content: ${content})`);
     }
+    
+    return content;
   }
 
   // ============================================

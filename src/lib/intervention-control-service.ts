@@ -242,7 +242,6 @@ export class DominantStrayStateEstimator {
 import {
   StructuralFact,
   deriveQuestionSemantics,
-  translateQuestionToLanguage,
   VIEWPOINT_OPERATORS,
   QuestionSemantics,
   ViewpointOperator
