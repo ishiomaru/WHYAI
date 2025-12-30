@@ -76,12 +76,9 @@ export const UI_TEXTS = {
     COLLAPSE: '折りたたみ',
     GROUP: 'グルーピング',
     TIMELINE: '時間軸配置'
-  },
-  QUESTIONS: {
-    DIFF_ABSENCE: 'もしこの中から一つだけ今すぐ選ぶ必要があるとしたら、どんな理由があれば差が生まれそうですか？',
-    AXIS_GRANULARITY: '今使っている理由は、「区別する」ためには十分そうですか？',
-    OPERATION_CONNECTION: 'これらを「後でやる／今やる」に分けるとしたら、何が必要でしょうか？'
   }
+  // QUESTIONS は削除 - 動的生成を使用（concept-compliant-types.ts の QUESTION_SEMANTICS）
+  // 参照: CONCEPT_NOTES.md L149-178 の型1,2,3 は「例」であり、静的テンプレートではない
 } as const;
 
 /**
@@ -126,32 +123,22 @@ export function generateOperabilityPresentation(
 }
 
 // ============================================
-// 3. Structural Question Generator (Layer C)
+// 3. Structural Question (Layer C)
 // 問い（構造内在型、判断を要求しない）
 // ============================================
 
-/**
- * 問いテンプレート
- * 
- * 【禁止】
- * - 「どうしますか？」(判断要求)
- * - 「何が問題ですか？」(評価要求)
- * - 「別の基準を考えましょうか？」(誘導)
- */
-const QUESTION_TEMPLATES: Record<StructuralQuestionType, string> = UI_TEXTS.QUESTIONS;
-
-/**
- * 構造内在型問いを生成（Layer C）
- */
-export function generateStructuralQuestion(
-  questionType: StructuralQuestionType = 'DIFF_ABSENCE'
-): StructuralQuestion {
-  return {
-    type: 'STRUCTURAL_QUESTION',
-    questionType,
-    content: QUESTION_TEMPLATES[questionType]
-  };
-}
+// 【重要】問いの生成は動的に行う
+// 静的テンプレートは使用しない（CONCEPT_NOTES.md L149-178 は「例」）
+// 
+// 問いの生成フロー:
+// 1. StrictInterventionController.deriveIntervention() で問いの意味構造を決定
+// 2. ai-service.translateToNaturalLanguage() で自然言語に翻訳
+// 3. 生成された問いは explicitQuestion として generateLearningStructure() に渡す
+//
+// 【禁止される問い】
+// - 「どうしますか？」(判断要求)
+// - 「何が問題ですか？」(評価要求)
+// - 「別の基準を考えましょうか？」(誘導)
 
 // ============================================
 // 4. Learning Structure Output Generator
@@ -195,14 +182,11 @@ export function generateLearningStructure(
   
   // Layer C: 問い（臨界点時、またはM3などで表示）
   // OutputControlに従う（Critical判定はOutputControl生成時に考慮済みとする）
+  // 【重要】問いは常に動的生成（explicitQuestion）を使用
+  // フォールバックなし - 問いがなければ表示しない
   let layerC: StructuralQuestion | undefined;
-  if (outputControl.showLayerC) {
-    if (explicitQuestion) {
-      layerC = explicitQuestion;
-    } else {
-      // フォールバック: 外部問いがない場合はデフォルト生成（従来ロジック）
-      layerC = generateStructuralQuestion();
-    }
+  if (outputControl.showLayerC && explicitQuestion) {
+    layerC = explicitQuestion;
   }
   
   return { layerA, layerB, layerC };
