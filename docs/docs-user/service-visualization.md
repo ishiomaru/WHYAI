@@ -13,7 +13,7 @@
 |---|---
 | ai-service.ts	|**AIサービス本体**。OpenAI互換クライアントを使用し、4段階パイプライン（意図検出→ノード抽出→選択肢生成→sandbox生成）を実装。「教えない・評価しない・推奨しない」の3禁止原則を厳守。
 | concept-compliant-types.ts	|**視点操作型の定義**。問いを「生成」せず「設計」するための構造定義。視点操作子（O0-O5）と迷子状態（M0-M5）のマッピング。
-| structure-generation-types.ts	|**コア型定義**。構造ノード、外部リソース、操作子ログ等の型。意味・評価・重要度を持たない「構造のみ」の制約を型レベルで強制。
+| structure-generation-types.ts	|**型エントリーポイント**。types/から全型を再エクスポート。既存コードとの互換性を維持。
 | intervention-control-service.ts	|**介入制御**。迷子状態推定器（DominantStrayStateEstimator）と厳格な介入コントローラー。学習者の「迷子パターン」を検出し適切な問いを導出。
 | learner-support-service.ts	|**学習者サポート統括**。段階的LLM呼び出しの制御とsandbox生成条件チェック。思考の代行/意味付けを禁止。
 | learning-structure-generator.ts	|**学習構造生成**。構造提示（事実のみ）、操作可能性提示、構造内在型問い生成の3層。禁止される操作（ハイライト・推奨等）は実装しない。
@@ -23,6 +23,18 @@
 | semantic-bridge.ts	|**意味的架け橋**。ユーザー意図の分類（DEEP_DIVE/BROAD_EXPLORATION等）と外部リソースから構造ノードへのマッピング。
 | support-context-assembler.ts	|**サポートコンテキスト組立**。現在の構造空間、操作ログ、迷子状態をまとめてAIに渡す準備。
 | utils.ts	|**ユーティリティ**。Tailwindクラス結合、ID生成、日時フォーマット等の汎用関数。
+
+### src/lib/types/ - 型定義層
+
+| ファイル	|役割
+|---|---
+| index.ts	|**型エクスポートのエントリーポイント**。全型を一元的に再エクスポート。
+| domain-model.ts	|**コアドメインモデル**。StructureNode, LostState, OperatorLogEntry等の基礎型。
+| external-resource.ts	|**外部リソース型**。ExternalResource, RawChunk, SearchQuery等のRAG関連型。
+| ui-types.ts	|**UI型**。PanelState, NodeTreeItem, ChatMessage, LearningStructureOutput等のUI関連型。
+| intervention-types.ts	|**介入型**。InterventionPhase, FactPresentation, StructuralQuestion等の介入制御関連型。
+| support-payload.ts	|**サポートペイロード型**。SupportPayload, ProjectionMap等 + ユーティリティ関数。
+
 
 ---
 
