@@ -6,7 +6,7 @@ import {
   CollectionGateController,
   createExternalResource,
   InvalidTransitionError
-} from '../lib/rag-control-service';
+} from '../external';
 
 // ============================================
 // 1. SearchQuery Generation Tests

@@ -4,7 +4,7 @@ import {
   StructuralFact,
   StructureNode 
 } from './structure-generation-types';
-import { AIService } from './ai-service';
+// AIService import removed - was unused
 
 export interface SupportContext {
   readonly currentSpace: readonly StructureNode[];

@@ -5,11 +5,10 @@
 
 import { IntentAnalyzer, SemanticState } from '../input/intent-analyzer';
 import { ProjectionMapper } from '../input/projection-mapper';
-import { DominantStrayStateEstimator, StructuralFactAnalyzer, determineOutputControl } from '../core';
-import { HomeostaticController } from '../homeostatic-controller';
-import { generateSearchQuery } from '../rag-control-service';
-import { generateLearningStructure } from '../learning-structure-generator';
-import { LearnerSupportService } from '../learner-support-service';
+import { DominantStrayStateEstimator, StructuralFactAnalyzer, determineOutputControl, HomeostaticController } from '../core';
+import { generateSearchQuery, chunkWithoutMeaning } from '../external';
+import { generateLearningStructure } from '../generation';
+import { LearnerSupportService } from './learner-support-service';
 import type { 
   OperatorLogEntry, 
   LearningStructureOutput, 
@@ -81,7 +80,7 @@ export class StructureGenerationPipeline {
     // 3. 外部リソース取得
     let externalResources: ExternalResource[] = [];
     if (!input.externalHtml) {
-      const { executeWebSearch } = await import('../web-search-service');
+      const { executeWebSearch } = await import('../external');
       externalResources = await executeWebSearch(searchQuery);
     }
 
@@ -147,7 +146,6 @@ export class StructureGenerationPipeline {
     input: PipelineInput,
     cleanedPurpose: string
   ): Promise<LearningStructureOutput> {
-    const { chunkWithoutMeaning } = await import('../rag-control-service');
     const rawChunks = input.externalHtml 
       ? chunkWithoutMeaning(input.externalHtml)
       : externalResources.flatMap(r => [...r.rawChunks]);

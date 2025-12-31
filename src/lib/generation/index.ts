@@ -8,3 +8,13 @@ export { generateOptions, type GeneratedOptions } from './options-generator';
 export { extractNodes, type ExtractedNodes } from './node-extractor';
 export { generateSandboxCode, type SandboxCode } from './sandbox-generator';
 export { detectIntent, type DetectedIntent } from './intent-detector';
+export {
+  generateLearningStructure,
+  generateStructurePresentation,
+  generateOperabilityPresentation,
+  reorderChunks,
+  toggleChunkCollapse,
+  groupChunks,
+  ungroupChunks,
+  UI_TEXTS
+} from './structure-generator';
