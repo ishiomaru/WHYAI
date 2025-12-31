@@ -6,7 +6,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   executeWebSearch,
   checkSearchServiceHealth
-} from '../web-search-service';
+} from '../external';
 import type { SearchQuery } from '../structure-generation-types';
 
 // ============================================

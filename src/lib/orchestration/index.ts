@@ -9,3 +9,4 @@ export {
   type PipelineInput,
   type PipelineOutput
 } from './pipeline';
+export { LearnerSupportService } from './learner-support-service';

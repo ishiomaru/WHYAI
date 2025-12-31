@@ -7,13 +7,12 @@ import { describe, it, expect, vi } from 'vitest';
 import {
   generateStructurePresentation,
   generateOperabilityPresentation,
-  generateStructuralQuestion,
   generateLearningStructure,
   reorderChunks,
   toggleChunkCollapse,
   groupChunks,
   ungroupChunks
-} from '../learning-structure-generator';
+} from '../generation';
 import type { RawChunk, ChunkData } from '../structure-generation-types';
 
 // ============================================
@@ -114,36 +113,10 @@ describe('generateOperabilityPresentation', () => {
 // ============================================
 // 3. Structural Question Tests (Layer C)
 // ============================================
+// Note: generateStructuralQuestion was removed.
+// Questions are now generated dynamically via StrictInterventionController.deriveIntervention()
+// and ai-service.translateToNaturalLanguage()
 
-describe('generateStructuralQuestion', () => {
-  it('構造内在型問いであること', () => {
-    const question = generateStructuralQuestion();
-    
-    expect(question.type).toBe('STRUCTURAL_QUESTION');
-    expect(question.questionType).toBeDefined();
-    expect(question.content).toBeDefined();
-  });
-
-  it('判断を要求しない形式であること', () => {
-    const question = generateStructuralQuestion('DIFF_ABSENCE');
-    
-    // 禁止されるパターン
-    expect(question.content).not.toContain('どうしますか');
-    expect(question.content).not.toContain('何が問題ですか');
-    expect(question.content).not.toContain('別の基準を考えましょう');
-  });
-
-  it('各タイプで適切なテンプレートが使用されること', () => {
-    const diffAbsence = generateStructuralQuestion('DIFF_ABSENCE');
-    expect(diffAbsence.content).toContain('差が生まれそう');
-    
-    const axisGranularity = generateStructuralQuestion('AXIS_GRANULARITY');
-    expect(axisGranularity.content).toContain('区別する');
-    
-    const operationConnection = generateStructuralQuestion('OPERATION_CONNECTION');
-    expect(operationConnection.content).toContain('後でやる／今やる');
-  });
-});
 
 // ============================================
 // 4. Learning Structure Output Tests

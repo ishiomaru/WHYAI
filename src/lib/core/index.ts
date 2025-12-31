@@ -13,3 +13,4 @@ export {
   determineOutputControl,
   type OutputControl 
 } from './output-controller';
+export { HomeostaticController, type HomeostaticState } from './homeostatic-controller';

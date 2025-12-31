@@ -2,29 +2,15 @@
 // Structure Generation API Endpoint
 // Next.js App Router API Route
 // ============================================
+//
+// リファクタリング後: ビジネスロジックはStructureGenerationPipelineに委譲
+// route.tsはAPIエンドポイントの入出力処理のみを担当
+// ============================================
 
 import { NextRequest, NextResponse } from 'next/server';
-import {
-  generateSearchQuery,
-  chunkWithoutMeaning,
-  createExternalResource,
-  CollectionGateController
-} from '@/lib/rag-control-service';
-import {
-  generateLearningStructure
-} from '@/lib/learning-structure-generator';
-import {
-  DominantStrayStateEstimator
-} from '@/lib/intervention-control-service';
-import type {
-  OperatorLogEntry,
-  LearningStructureOutput,
-  SearchQuery
-} from '@/lib/structure-generation-types';
-
-// ============================================
-// Request/Response Types
-// ============================================
+import { CollectionGateController } from '@/lib/external';
+import { structureGenerationPipeline } from '@/lib/orchestration/pipeline';
+import type { OperatorLogEntry, LearningStructureOutput, SearchQuery } from '@/lib/structure-generation-types';
 
 // ============================================
 // Request/Response Types
@@ -42,7 +28,7 @@ interface GenerateStructureRequest {
   /** 外部HTML（オプション、テスト用） */
   externalHtml?: string;
   /** 現在のノード構造（コンテキスト維持用） */
-  currentNodes?: any[]; // StructureNode[] but using loose type for now to match API usage
+  currentNodes?: any[];
 }
 
 interface GenerateStructureResponse {
@@ -68,7 +54,6 @@ interface ErrorResponse {
 // ============================================
 
 const collectionGate = new CollectionGateController();
-const estimator = new DominantStrayStateEstimator();
 
 // ============================================
 // API Handler
@@ -96,10 +81,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    // 【選択】プレフィックスの除去 (AIの誤解釈防止)
-    // フロントエンドが送る "【選択】ユーザの回答" からマーカーを除去し、純粋な回答のみにする
-    let cleanedPurpose = body.purposeAlpha.replace(/^[【\[]選択[\]】]\s*/, '');
-    
     // 収集可否チェック
     if (!collectionGate.canCollect()) {
       return NextResponse.json<ErrorResponse>(
@@ -108,183 +89,24 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
-    // 1. 意味的解析 (Semantic Bridge)
-    // ユーザー入力から意図とドリフトを解析
-    const { IntentClassifier } = await import('@/lib/semantic-bridge');
-    const semanticState = await IntentClassifier.analyze(
-      cleanedPurpose, 
-      body.operatorLogs || []
-    );
+    // パイプライン実行（すべてのビジネスロジックを委譲）
+    const result = await structureGenerationPipeline.execute({
+      purposeAlpha: body.purposeAlpha,
+      purposeBetaHypothesis: body.purposeBetaHypothesis,
+      axis1Tentative: body.axis1Tentative,
+      operatorLogs: body.operatorLogs,
+      externalHtml: body.externalHtml,
+      currentNodes: body.currentNodes
+    });
 
-    
-    // 2. 検索クエリ生成 & 外部リソース取得
-    // 意図に基づいて検索を行う（役割上限遵守）
-    const searchQuery = generateSearchQuery(
-      cleanedPurpose,
-      body.purposeBetaHypothesis,
-      body.axis1Tentative
-    );
-    
-    let rawChunks: import('@/lib/structure-generation-types').RawChunk[] = [];
-    let externalResources: import('@/lib/structure-generation-types').ExternalResource[] = [];
-
-    if (body.externalHtml) {
-      rawChunks = chunkWithoutMeaning(body.externalHtml);
-    } else {
-      const { executeWebSearch } = await import('@/lib/web-search-service');
-      // 検索実行
-      externalResources = await executeWebSearch(searchQuery);
-      rawChunks = externalResources.flatMap(r => [...r.rawChunks]);
-    }
-    
-    // 3. 迷子状態推定 (DominantStrayStateEstimator)
-    let lostStateEstimate: import('@/lib/structure-generation-types').LostStateEstimate | undefined;
-    if (body.operatorLogs && body.operatorLogs.length > 0) {
-      const deltas = body.operatorLogs.map(log => log.structuralDelta);
-      lostStateEstimate = estimator.estimate(body.operatorLogs, deltas);
-    }
-
-    // デフォルト推定（初学者扱い）
-    if (!lostStateEstimate) {
-       lostStateEstimate = {
-         dominantState: 'M0', // 初期状態
-         confidence: 'LOW',
-         isCritical: false,
-         observationBasis: []
-       };
-    }
-    
-    // 4. 動的ホメオスタシス制御 (Homeostatic Controller)
-    const { HomeostaticController } = await import('@/lib/homeostatic-controller');
-    // 状態統合
-    const homeostaticState = HomeostaticController.integrateState(lostStateEstimate, semanticState);
-    
-    // アクション決定 (問い vs 投影)
-    const action = HomeostaticController.decideAction(homeostaticState, externalResources);
-    
-    let structure: LearningStructureOutput;
-
-    if (action === 'PROJECTION') {
-        // === 資源投影モード ===
-        // 現在の学習構造（Layer A）を生成し、そこにリソースノードを追加する
-        // ※ 本来は以前の構造を引き継ぐべきだが、簡易的に新規生成＋マージを行う
-        const baseStructure = generateLearningStructure(rawChunks, lostStateEstimate, {
-             showLayerA: true, showLayerB: true, showLayerC: false, // 問いは出さない
-             layerBEmphasis: false, sequenceFixed: false
-        });
-
-        // リソースのマッピング
-        // ※ Layer Aのchunksに仮想的に追加する、または専用のプロパティが必要検討
-        // ここでは、LearningStructureGeneratorがResourceProxy対応していないため、
-        // 暫定的に「ChunkData」としてテキスト化して追加する（UI側でリンクとして扱えるよう工夫が必要）
-        // または、LayerAの拡張が必要。
-        // ★以前のドキュメントの「構造的再編」概念を利用する
-        // しかし、LearningStructureOutput型にリソース用フィールドがないため、
-        // 暫定的に `layerA.chunks` に混ぜる（設計上の課題点だがブリッジとして実装）
-        
-        const { ProjectionMapper } = await import('@/lib/semantic-bridge');
-        // 既存構造を引き継いでリソースノードを追加
-        const projectedNodes = HomeostaticController.executeProjection(
-            semanticState, externalResources, body.currentNodes || []
-        );
-        
-        const resourceChunks = projectedNodes.map(node => ({
-            id: node.id,
-            text: `[RESOURCE] ${node.sourceRef}`, // UI側でこれを検知してリンク表示する想定
-            collapsed: false,
-            groupId: null
-        }));
-
-        structure = {
-            ...baseStructure,
-            layerA: {
-                ...baseStructure.layerA,
-                chunks: [...baseStructure.layerA.chunks, ...resourceChunks]
-            }
-        };
-
-    } else {
-        // === 介入モード (問い) ===
-        // 既存のControl Logic + CriticalInterventionControllerの復活
-        
-        // 臨界点処理
-        if (lostStateEstimate.isCritical) {
-            const { CriticalInterventionController } = await import('@/lib/intervention-control-service');
-            const criticalCtrl = new CriticalInterventionController();
-            
-            // 臨界点での問いを導出
-            const sequence = await criticalCtrl.executeIntervention(lostStateEstimate, cleanedPurpose, body.currentNodes || []);
-            
-            // 型を正しく合わせる: LearningStructureOutputを生成
-            // 臨界点では全レイヤーを表示、問いは導出されたものを使用
-            structure = generateLearningStructure(rawChunks, lostStateEstimate, {
-                showLayerA: true,
-                showLayerB: true,
-                showLayerC: true,
-                layerBEmphasis: false,
-                sequenceFixed: true  // 臨界点では順序固定
-            }, sequence.layerC);
-            
-        } else {
-            // 通常介入
-            // OutputControlの決定
-            const { determineOutputControl, StrictInterventionController } = await import('@/lib/intervention-control-service');
-            const outputControl = determineOutputControl(lostStateEstimate);
-            
-            // 問いの厳格な導出 (Layer C)
-            let derivedQuestion: import('@/lib/structure-generation-types').StructuralQuestion | undefined;
-            if (outputControl.showLayerC) {
-                const strictCtrl = new StrictInterventionController();
-                // 厳格なルールに基づいて問いを生成
-                derivedQuestion = await strictCtrl.deriveIntervention(
-                    lostStateEstimate, 
-                    { purposeAlpha: cleanedPurpose },
-                    body.currentNodes || []
-                );
-            }
-
-            structure = generateLearningStructure(rawChunks, lostStateEstimate, outputControl, derivedQuestion);
-        }
-    }
-
-    // 5. Learner Support Extension (Section VI)
-    // 学習者の迷子状態に合わせて、投影・地形・サンドボックスを生成
-    
-    // 現在のノード
-    const currentNodes: any[] = body.currentNodes || []; 
-
-    // StructuralFactの計算
-    const { StructuralFactAnalyzer } = await import('@/lib/intervention-control-service');
-    const logs = body.operatorLogs || [];
-    const logsDeltas = logs.map((l: any) => l.structuralDelta);
-    const fact = StructuralFactAnalyzer.analyze(logs, logsDeltas, currentNodes);
-    
-
-    const { LearnerSupportService } = await import('@/lib/learner-support-service');
-    const supportPayload = await LearnerSupportService.execute(
-        currentNodes,
-        logs,
-        lostStateEstimate.dominantState,
-        fact,
-        cleanedPurpose,  // 学習者入力を渡す
-        action === 'PROJECTION' ? externalResources : [] // 投影モード時のみリソースを渡す
-    );
-    
-    // Support Payloadを統合
-    // LearningStructureOutput型にsupportを追加したため、型アサーション不要
-    structure = {
-        ...structure,
-        support: supportPayload
-    };
-    
     // レスポンス構築
     const response: GenerateStructureResponse = {
-      structure,
-      searchQuery,
+      structure: result.structure,
+      searchQuery: result.searchQuery,
       lostStateEstimate: {
-        dominantState: lostStateEstimate.dominantState,
-        confidence: lostStateEstimate.confidence,
-        isCritical: lostStateEstimate.isCritical
+        dominantState: result.lostStateEstimate.dominantState,
+        confidence: result.lostStateEstimate.confidence,
+        isCritical: result.lostStateEstimate.isCritical
       }
     };
     
@@ -327,3 +149,4 @@ export async function GET(): Promise<NextResponse> {
     ]
   });
 }
+

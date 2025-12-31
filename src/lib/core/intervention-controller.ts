@@ -19,15 +19,15 @@ import {
 } from '../concept-compliant-types';
 import { StructuralFactAnalyzer } from './fact-analyzer';
 
-// Forward declaration for aiService to avoid circular dependency
-// Will be injected or imported lazily
-let aiServiceModule: typeof import('../ai-service') | null = null;
+// Forward declaration for translateToNaturalLanguage to avoid circular dependency
+let translateFn: typeof import('../generation')['translateToNaturalLanguage'] | null = null;
 
-async function getAiService() {
-  if (!aiServiceModule) {
-    aiServiceModule = await import('../ai-service');
+async function getTranslateFunction() {
+  if (!translateFn) {
+    const mod = await import('../generation');
+    translateFn = mod.translateToNaturalLanguage;
   }
-  return aiServiceModule.aiService;
+  return translateFn;
 }
 
 /**
@@ -79,8 +79,8 @@ export class StrictInterventionController {
     });
 
     // 4. Translate
-    const aiService = await getAiService();
-    const content = await aiService.translateToNaturalLanguage(semantics);
+    const translate = await getTranslateFunction();
+    const content = await translate(semantics);
 
     return {
       type: 'STRUCTURAL_QUESTION',

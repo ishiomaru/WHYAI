@@ -8,7 +8,7 @@ import {
   DominantStrayStateEstimator,
   CriticalInterventionController,
   determineOutputControl
-} from '../intervention-control-service';
+} from '../core';
 import type {
   OperatorLogEntry,
   StructuralDeltaType,

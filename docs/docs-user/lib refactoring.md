@@ -1,6 +1,12 @@
-# lib層リファクタリング計画（更新版）
+# lib層リファクタリング計画（完了）
 
-## 完了済みの修正
+## ステータス: ✅ 完了
+
+リファクタリングは2024-12-31に完了しました。
+
+---
+
+## 完了した修正
 
 ### ✅ 静的テンプレート問題の修正
 
@@ -14,112 +20,99 @@ learning-structure-generator.tsから静的テンプレートを削除:
 - ai-service.translateToNaturalLanguage() で自然言語翻訳
 - generateLearningStructure(explicitQuestion)に渡す
 
----
+### ✅ ファイル分割完了
 
-
-## 議論で明確になった点
-
-### 1. 設計用語と実装用語の不一致
-|設計書の用語|現在の実装|問題|
-|---|---|---|
-|Layer A (構造空間)|チャンク変換|設計=概念、実装=データ変換|
-|Layer B (動的/状態)|操作子定義|設計=概念、実装=UIボタン|
-|Layer C (介入/問い)|問い表示|一致してる|
-
-### 2. コアロジックと意図理解は分けるべき
-現在:
-
-- core/intent-analyzer.ts に意図理解を入れようとした
-修正:
-
-- 意図理解 = 入力処理（Step 1）
-- コアロジック = 迷子推定→判定→介入（Step 2-4）
-- 別の責務なので別フォルダにすべき
-
-### 3. LLMクライアントの名前
-現在: OpenAIのSDKを使ってるがLocal LLMに接続 修正: llm-client.ts のままでOK（内部実装は柔軟）
-
-### 4. サポート系の再定義
-現在: 「サポート」という曖昧な概念 実態: AI呼び出し以外の処理オーケストレーション
+| 元ファイル | 変更後 |
+|-----------|--------|
+| intervention-control-service.ts (517行) | 26行（core/からre-export） |
+| semantic-bridge.ts (98行) | 22行（input/からre-export） |
+| ai-service.ts (561行) | 125行（ファサードパターン） |
+| route.ts (330行) | 152行（パイプライン委譲） |
 
 ---
 
-## 提案するファイル構成（修正版）
+## 最終ファイル構成
 
 ```
 src/lib/
 │
 ├── input/                     # 入力処理
-│   └── intent-analyzer.ts     # 意図理解（旧 semantic-bridge + classifyIntent）
+│   ├── index.ts
+│   ├── intent-analyzer.ts     # 意図理解
+│   └── projection-mapper.ts   # リソース→ノード変換
 │
-├── core/                      # コアロジック（処理フロー）
-│   ├── lost-state-estimator.ts # 迷子推定（旧 intervention-control-service の一部）
-│   ├── homeostatic-controller.ts # 投影/問い判定
-│   └── intervention-controller.ts # 介入制御
+├── core/                      # コアロジック
+│   ├── index.ts
+│   ├── lost-state-estimator.ts # M0-M5迷子推定
+│   ├── fact-analyzer.ts       # 構造的事実分析
+│   ├── intervention-controller.ts # 介入制御
+│   └── output-controller.ts   # Layer A/B/C出力制御
 │
 ├── generation/                # 生成系
-│   ├── structure-generator.ts # Layer A/B/C生成（旧 learning-structure-generator）
-│   ├── options-generator.ts   # 選択肢生成（旧 ai-service.generateOptions）
-│   ├── sandbox-generator.ts   # sandbox生成（旧 ai-service.generateSandboxCode）
-│   └── node-extractor.ts      # ノード抽出【要検討: 投影との関係】
+│   ├── index.ts
+│   ├── question-translator.ts # 問い翻訳
+│   ├── options-generator.ts   # 選択肢生成
+│   ├── node-extractor.ts      # ノード抽出
+│   ├── sandbox-generator.ts   # sandbox生成
+│   └── intent-detector.ts     # ソート/フィルタ意図検出
 │
 ├── external/                  # 外部連携
-│   ├── web-search-service.ts  # Web検索
-│   ├── search-query-builder.ts # クエリ生成
-│   └── chunking-service.ts    # チャンキング
+│   ├── index.ts
+│   └── web-search-service.ts  # Web検索
 │
-├── llm/                       # LLM呼び出し（Local/Cloud両対応）
+├── llm/                       # LLM呼び出し
+│   ├── index.ts
 │   └── llm-client.ts          # LLMクライアント
 │
-├── orchestration/             # 処理統括（旧 support）
-│   ├── learner-support-service.ts # 処理オーケストレーター
-│   └── context-assembler.ts   # コンテキスト組立
+├── orchestration/             # 処理統括
+│   ├── index.ts
+│   └── pipeline.ts            # メイン処理パイプライン
 │
-├── types/                     # 型定義（分割済み）
+├── types/                     # 型定義（既存・分割済み）
 │
-└── utils.ts                   # ユーティリティ
+└── [既存ファイル]              # 後方互換性（re-export）
 ```
 
 ---
 
-## 残りの論点
+## 解決済みの論点
 
-### 1. ノード抽出（node-extractor）の位置づけ
-問題: ノード抽出は「投影」なのか「生成」なのか？
-設計書的には:
-
-- 「投影」= 学習者の認識を地図にする
-- ノード抽出は「投影」の一部
-
-選択肢:
-- A: core/に入れる（投影の一部として）
-- B: generation/に入れる（生成系として）
-- C: 別の概念として再定義
+### 1. ノード抽出の位置づけ
+**決定**: generation/に配置
+理由: 純粋なLLM生成処理のため
 
 ### 2. Layer A/B/C の概念整理
-問題: 設計用語と実装が合っていない
-選択肢:
-- A: 実装に合わせて設計書を更新
-- B: 設計書に合わせて実装を更新
-- C: 別の名前に変更
+**決定**: 実装優先で維持
+設計書との乖離は将来的に検討
 
-### 3. embedText()の削除
-状況: ドリフト分析用だが、ドリフトはいらないという話だった
+### 3. embedText()
+**決定**: llm-client.tsに維持
+将来のドリフト分析のために残す
 
-選択肢:
-- A: 削除
-- B: 将来のために残す
-
-### 4. CollectionGateControllerの削除
-状況: canCollect()以外使われていない
-選択肢:
-- A: 削除
-- B: 必要になるまで残す
+### 4. CollectionGateController
+**決定**: rag-control-service.tsに維持
+canCollect()は現在も使用中
 
 ---
 
-## 次のステップ
-1. 残りの論点を相談して決める
-2. ファイル分割を実行
-3. 型チェック・テストで検証
-4. ドキュメント更新
+## 後方互換性
+
+すべての既存import文はそのまま動作します:
+
+```typescript
+// 既存のimport（動作する）
+import { DominantStrayStateEstimator } from '@/lib/intervention-control-service';
+import { IntentClassifier } from '@/lib/semantic-bridge';
+
+// 新しい推奨import
+import { DominantStrayStateEstimator } from '@/lib/core';
+import { IntentAnalyzer } from '@/lib/input';
+```
+
+---
+
+## 検証結果
+
+- ✅ TypeScript型チェック: Pass
+- ✅ Next.js本番ビルド: Pass
+- ✅ 後方互換性: 確認済み
